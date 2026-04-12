@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "streamkit"
+version = "0.1.0"
+description = "StreamKit - a self-hostable media pipeline and MCP server"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.128.0",
+  "uvicorn[standard]",
+  "mcp[cli]",
+  "boto3",
+  "celery",
+  "redis",
+  "supabase",
+  "pydantic",
+  "pydantic-settings",
+  "structlog",
+  "blurhash",
+  "pillow",
+  "numpy",
+  "opencv-contrib-python-headless",
+  "python-multipart",
+  "httpx",
+  "pytest",
+  "pytest-asyncio",
+  "pillow-avif-plugin>=1.5.5",
+  "pyjwt[crypto]>=2.10.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.hatch.build.targets.wheel]
+packages = ["api", "worker", "streamkit_mcp"]

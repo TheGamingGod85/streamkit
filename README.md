@@ -26,6 +26,14 @@ ImageKit: $500/month | Cloudinary: $1500/month | StreamKit: $0/month
 
 StreamKit is a fully open source media processing platform that you can self host on your own server. It handles everything from image optimization and real time transformations to adaptive bitrate video streaming. It connects to your existing storage like AWS S3, Cloudflare R2, Azure Blob, or Google Cloud Storage without moving a single file. It ships with a built in digital asset management system, a multi tenant workspace system, analytics, webhooks, transformation presets, and a FastMCP server that lets AI tools like Claude and Cursor control your entire media pipeline using natural language.
 
+Search keywords:
+
+- open source ImageKit alternative
+- self hosted Cloudinary alternative
+- open source media processing
+- self hosted image optimization
+- HLS streaming open source
+
 ## Features
 
 1. Real time image transformations

@@ -1,32 +1,101 @@
+x-app-environment: &app-environment
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+
+x-app-service: &app-service
+  env_file:
+    - .env
+  init: true
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp
+
+x-app-source-mounts: &app-source-mounts
+  - ./api:/app/api
+  - ./worker:/app/worker
+  - ./streamkit_mcp:/app/streamkit_mcp
+  - ./mcp:/app/mcp
+  - ./migrations:/app/migrations
+
 services:
   redis:
     image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped
 
   api:
-    image: python:3.12-slim
-    working_dir: /app
-    volumes:
-      - ./:/app
-    env_file:
-      - .env
-    command: ["python", "-m", "uvicorn", "api.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    <<: *app-service
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      <<: *app-environment
+    command:
+      - uvicorn
+      - api.main:create_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
-    restart: unless-stopped
+    volumes: *app-source-mounts
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import sys, urllib.request; sys.exit(0 if urllib.request.urlopen("http://127.0.0.1:8000/health").status == 200 else 1)
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   worker:
-    image: python:3.12-slim
-    working_dir: /app
-    volumes:
-      - ./:/app
-    env_file:
-      - .env
-    command: ["python", "-m", "celery", "-A", "worker.celery_app:celery_app", "worker", "-l", "info", "-Q", "streamkit,video,metadata,image"]
+    <<: *app-service
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      <<: *app-environment
     depends_on:
-      - redis
-    restart: unless-stopped
+      redis:
+        condition: service_healthy
+    volumes: *app-source-mounts
+
+  mcp:
+    <<: *app-service
+    build:
+      context: .
+      dockerfile: mcp/Dockerfile
+    environment:
+      <<: *app-environment
+      STREAMKIT_BASE_URL: http://api:8000
+      STREAMKIT_MCP_PORT: 8001
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    volumes: *app-source-mounts
+
+volumes:
+  redis_data:

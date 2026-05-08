@@ -1,58 +1,99 @@
+x-app-environment: &app-environment
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+
+x-app-service: &app-service
+  env_file:
+    - .env
+  init: true
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp
+
 services:
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped
 
   api:
+    <<: *app-service
     build:
       context: .
       dockerfile: api/Dockerfile
-    env_file:
-      - .env
     environment:
-      REDIS_URL: redis://redis:6379/0
+      <<: *app-environment
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     expose:
       - "8000"
-    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import sys, urllib.request; sys.exit(0 if urllib.request.urlopen("http://127.0.0.1:8000/health").status == 200 else 1)
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   worker:
+    <<: *app-service
     build:
       context: .
       dockerfile: worker/Dockerfile
-    env_file:
-      - .env
     environment:
-      REDIS_URL: redis://redis:6379/0
+      <<: *app-environment
     depends_on:
-      - redis
-    restart: unless-stopped
+      redis:
+        condition: service_healthy
+    stop_grace_period: 45s
 
   mcp:
+    <<: *app-service
     build:
       context: .
       dockerfile: mcp/Dockerfile
-    env_file:
-      - .env
     environment:
+      <<: *app-environment
+      STREAMKIT_BASE_URL: http://api:8000
       STREAMKIT_MCP_PORT: 8001
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     expose:
       - "8001"
-    restart: unless-stopped
 
   nginx:
     image: nginx:1.27-alpine
     depends_on:
-      - api
-      - mcp
+      api:
+        condition: service_healthy
+      mcp:
+        condition: service_started
     ports:
       - "80:80"
     volumes:
       - ./infra/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
